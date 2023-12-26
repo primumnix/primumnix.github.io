@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Парсинг данных</title>
+		<style>
+			:root {
+				--main-text-color: #333;
+				--main-bg-color: #f7f7f7;
+				--container-bg-color: #fff;
+				--border-color: #ccc;
+				--button-bg-color: #4caf50;
+				--button-bg-hover-color: #45a049;
+			}
+			body {
+				font-family: Arial, sans-serif;
+				margin: 0;
+				padding: 0;
+				background-color: var(--main-bg-color);
+			}
+			.heading {
+				color: var(--main-text-color);
+			}
+			.text-content {
+				margin: 5px;
+			}
+			#container {
+				max-width: 800px;
+				margin: 0 auto;
+				padding: 20px;
+				background-color: var(--container-bg-color);
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			}
+			.input-area {
+				width: 100%;
+				height: 200px;
+				resize: none;
+				box-sizing: border-box;
+				padding: 10px;
+				font-size: 14px;
+				border: 1px solid var(--border-color);
+			}
+			.label {
+				font-size: 14px;
+				color: var(--main-text-color);
+			}
+			.select-box {
+				font-size: 14px;
+				padding: 5px;
+			}
+			.button {
+				background-color: var(--button-bg-color);
+				color: white;
+				padding: 10px 20px;
+				font-size: 14px;
+				cursor: pointer;
+				border: none;
+				border-radius: 4px;
+				margin-top: 10px;
+			}
+			.button:hover {
+				background-color: var(--button-bg-hover-color);
+			}
+			#output-format-container {
+				margin-top: 5px;
+			}
+			#checkbox-container {
+				margin-top: 5px;
+			}
+			#results {
+				height: 180px;
+				overflow-y: scroll;
+				margin-top: 10px;
+				padding: 10px;
+				font-size: 14px;
+				border: 1px solid var(--border-color);
+			}
+			.list {
+				list-style-type: none;
+				padding: 0;
+				margin: 0;
+			}
+			.list-item {
+				margin-bottom: 5px;
+			}
+			#summary {
+				margin-top: 10px;
+			}
+			@media (max-width: 768px) {
+				#container {
+					padding: 10px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div id="container">
+			<h3 class="heading">Вставьте текст в поле ниже</h3>
+			<form id="card-data-form">
+				<textarea
+					id="input-text"
+					class="input-area"
+					placeholder="Вставьте текст здесь..."></textarea>
+				<div>
+					<label for="parse-type" class="label">Что парсим:</label>
+					<select id="parse-type" class="select-box">
+						<option value="cards">Карты</option>
+						<option value="phones">Телефоны</option>
+					</select>
+				</div>
+				<div id="output-format-container">
+					<label for="output-format" class="label">Формат вывода:</label>
+					<select id="output-format" class="select-box">
+						<!-- Динамически обновляемые опции формата вывода -->
+					</select>
+					<select id="phone-format" class="select-box" style="display: none">
+						<option value="as-is">Вывод</option>
+						<option value="with-7">С 7</option>
+						<option value="with-9">С 9</option>
+					</select>
+				</div>
+				<div id="checkbox-container">
+					<input type="checkbox" id="remove-duplicates" checked />
+					<label for="remove-duplicates" class="label">Удалить дубликаты</label>
+				</div>
+				<button type="submit" class="button">Извлечь данные</button>
+			</form>
+			<div id="summary">
+				<p class="text-content">
+					Найдено:
+					<span id="found-items">0</span>
+				</p>
+				<p class="text-content">
+					Удалено дублей из текста:
+					<span id="removed-duplicates">0</span>
+				</p>
+			</div>
+
+			<div id="results"></div>
+		</div>
+
+		<script>
+			document.addEventListener('DOMContentLoaded', () => {
+				const form = document.getElementById('card-data-form')
+				const parseTypeSelect = document.getElementById('parse-type')
+				const outputFormatSelect = document.getElementById('output-format')
+				const phoneFormatSelect = document.getElementById('phone-format')
+				const removeDuplicatesCheckbox =
+					document.getElementById('remove-duplicates')
+				const summaryElement = document.getElementById('summary')
+				const foundItemsElement = document.getElementById('found-items')
+				const removedDuplicatesElement =
+					document.getElementById('removed-duplicates')
+				const resultsElement = document.getElementById('results')
+
+				const updateOutputFormatOptions = parseType => {
+					const options = `
+                    <option value="comma-separated">Через запятую</option>
+                    <option value="new-line">С новой строки</option>
+                    <option value="array">Массив</option>
+                `
+					outputFormatSelect.innerHTML = options
+				}
+
+				const formatPhoneNumber = (number, format) => {
+					if (format === 'with-7' && number.length === 10) {
+						return '7' + number
+					} else if (format === 'with-9' && number.length === 11) {
+						return number.substring(1)
+					}
+					return number
+				}
+
+				const parseRegex = (text, regex) => text.match(regex) || []
+
+				const parseData = (text, type, phoneFormat) => {
+					let parsedData
+					if (type === 'cards') {
+						parsedData = parseRegex(text, /778\d{13}/g)
+					} else {
+						const phones = parseRegex(
+							text,
+							/\b79[\s()-]*\d{2}[\s()-]*\d{3}[\s()-]*\d{2}[\s()-]*\d{2}\b|\b9[\s()-]*\d{2}[\s()-]*\d{3}[\s()-]*\d{2}[\s()-]*\d{2}\b/g
+						)
+						parsedData = phones.map(phone =>
+							formatPhoneNumber(phone.replace(/[^\d]/g, ''), phoneFormat)
+						)
+					}
+
+					const originalDataLength = parsedData.length
+					if (removeDuplicatesCheckbox.checked) {
+						parsedData = [...new Set(parsedData)]
+					}
+
+					return {
+						data: parsedData,
+						originalLength: originalDataLength,
+					}
+				}
+
+				const renderResults = (items, format) => {
+					switch (format) {
+						case 'comma-separated':
+							return items.join(', ')
+						case 'new-line':
+							return items.join('<br>')
+						case 'array':
+							const quotedItems = items.map(item => `"${item}"`)
+							return `[${quotedItems.join(', ')}]`
+					}
+				}
+
+				const updateSummary = parsedData => {
+					const duplicatesCount =
+						parsedData.originalLength - parsedData.data.length
+					foundItemsElement.textContent = parsedData.data.length
+					removedDuplicatesElement.textContent = duplicatesCount
+					summaryElement.style.display = 'block'
+				}
+
+				updateOutputFormatOptions(parseTypeSelect.value)
+
+				parseTypeSelect.addEventListener('change', () => {
+					updateOutputFormatOptions(parseTypeSelect.value)
+					phoneFormatSelect.style.display =
+						parseTypeSelect.value === 'phones' ? 'inline' : 'none'
+				})
+
+				form.addEventListener('submit', event => {
+					event.preventDefault()
+					const inputText = document.getElementById('input-text').value
+					const parsedResult = parseData(
+						inputText,
+						parseTypeSelect.value,
+						phoneFormatSelect.value
+					)
+					resultsElement.innerHTML = renderResults(
+						parsedResult.data,
+						outputFormatSelect.value
+					)
+					updateSummary(parsedResult)
+				})
+			})
+		</script>
+	</body>
+</html>
